@@ -1,5 +1,4 @@
-import type { Action } from './types';
-import { createEventDispatcher } from 'svelte';
+import type { Action } from "./types";
 /**
  * Creates panStart, panMove, panEnd events so you can drag elements.
  *
@@ -12,14 +11,14 @@ import { createEventDispatcher } from 'svelte';
  */
 
 type PointerEventTag =
-  | 'pointercancel'
-  | 'pointerdown'
-  | 'pointerenter'
-  | 'pointerleave'
-  | 'pointermove'
-  | 'pointerout'
-  | 'pointerover'
-  | 'pointerup';
+  | "pointercancel"
+  | "pointerdown"
+  | "pointerenter"
+  | "pointerleave"
+  | "pointermove"
+  | "pointerout"
+  | "pointerover"
+  | "pointerup";
 
 type EventTag = keyof HTMLElementEventMap;
 type EventFromEventTag<K extends EventTag> = HTMLElementEventMap[K];
@@ -103,7 +102,7 @@ const handleMultipointerpanmove = <El extends HTMLElement>(
     .filter((arr) => arr.length === 1)
     .map(
       (cacheEntry) =>
-        new CustomEvent('multipointerpanmove', {
+        new CustomEvent("multipointerpanmove", {
           detail: {
             delta: pointerDifference(
               cacheEntry[cacheEntry.length - 2],
@@ -123,17 +122,17 @@ const handleIncomingPointerEventsStream = <El extends HTMLElement>(
   item: TaggedEvent<PointerEventTag, El>
 ): Map<string, CacheEntry<El>> => {
   switch (item.tag) {
-    case 'pointerdown':
+    case "pointerdown":
       cache.set(`${item.event.pointerId}`, [item, item]);
       return cache;
-    case 'pointermove': {
+    case "pointermove": {
       const cacheEntry = cache.get(`${item.event.pointerId}`);
       if (cacheEntry) {
         cache.set(`${item.event.pointerId}`, [...cacheEntry, item]);
       }
       return cache;
     }
-    case 'pointerup':
+    case "pointerup":
       cache.delete(`${item.event.pointerId}`);
       return cache;
     default:
@@ -141,48 +140,53 @@ const handleIncomingPointerEventsStream = <El extends HTMLElement>(
   }
 };
 
-export const pannable: Action = (node) => {
-  let x: number;
-  let y: number;
+export const pannable: Action<{ xi: number; yi: number; zi: number }, void> = (
+  node,
+  { xi, yi, zi }
+) => {
+  let x: number = xi;
+  let y: number = yi;
+  let z: number = zi;
 
   const cache = new Map<string, CacheEntry<typeof node>>();
 
-  function handle_pointerdown(event: EventFromEventTag<'pointerdown'>) {
-    x = event.clientX;
-    y = event.clientY;
-
-    const taggedEv: TaggedEvent<'pointerdown', typeof node> = {
-      tag: 'pointerdown',
+  function handle_pointerdown(event: EventFromEventTag<"pointerdown">) {
+    const pointerdownEv: TaggedEvent<"pointerdown", typeof node> = {
+      tag: "pointerdown",
       element: node,
       event: event,
     };
-    handleIncomingPointerEventsStream(cache, taggedEv);
+    const { ndc, pixel } = coordinates(pointerdownEv);
+
+    handleIncomingPointerEventsStream(cache, pointerdownEv);
 
     node.dispatchEvent(
-      new CustomEvent('panstart', {
-        detail: { x, y },
+      new CustomEvent("panstart", {
+        detail: { x: ndc.x, y: ndc.y },
       })
     );
 
-    window.addEventListener('pointermove', handle_pointermove);
-    window.addEventListener('pointerup', handle_pointerup);
+    window.addEventListener("pointermove", handle_pointermove);
+    window.addEventListener("pointerup", handle_pointerup);
   }
 
-  function handle_pointermove(event: EventFromEventTag<'pointermove'>) {
-    const dx = event.clientX - x;
-    const dy = event.clientY - y;
-    x = event.clientX;
-    y = event.clientY;
-
-    const taggedEv: TaggedEvent<'pointermove', typeof node> = {
-      tag: 'pointermove',
+  function handle_pointermove(event: EventFromEventTag<"pointermove">) {
+    const pointerMoveEv: TaggedEvent<"pointermove", typeof node> = {
+      tag: "pointermove",
       element: node,
       event: event,
     };
-    handleIncomingPointerEventsStream(cache, taggedEv);
+    const { ndc, pixel } = coordinates(pointerMoveEv);
+
+    const dx = x - ndc.x;
+    const dy = y - ndc.y;
+    x = ndc.x;
+    y = ndc.y;
+
+    handleIncomingPointerEventsStream(cache, pointerMoveEv);
 
     node.dispatchEvent(
-      new CustomEvent('panmove', {
+      new CustomEvent("panmove", {
         detail: { x, y, dx, dy },
       })
     );
@@ -193,32 +197,31 @@ export const pannable: Action = (node) => {
     );
   }
 
-  function handle_pointerup(event: EventFromEventTag<'pointerup'>) {
-    x = event.clientX;
-    y = event.clientY;
-
-    const taggedEv: TaggedEvent<'pointerup', typeof node> = {
-      tag: 'pointerup',
+  function handle_pointerup(event: EventFromEventTag<"pointerup">) {
+    const pointerupEv: TaggedEvent<"pointerup", typeof node> = {
+      tag: "pointerup",
       element: node,
       event: event,
     };
-    handleIncomingPointerEventsStream(cache, taggedEv);
+    const { ndc, pixel } = coordinates(pointerupEv);
+
+    handleIncomingPointerEventsStream(cache, pointerupEv);
 
     node.dispatchEvent(
-      new CustomEvent('panend', {
-        detail: { x, y },
+      new CustomEvent("panend", {
+        detail: { x: ndc.x, y: ndc.y },
       })
     );
 
-    window.removeEventListener('pointermove', handle_pointermove);
-    window.removeEventListener('pointerup', handle_pointerup);
+    window.removeEventListener("pointermove", handle_pointermove);
+    window.removeEventListener("pointerup", handle_pointerup);
   }
 
-  node.addEventListener('pointerdown', handle_pointerdown);
+  node.addEventListener("pointerdown", handle_pointerdown);
 
   return {
     destroy() {
-      node.removeEventListener('pointerdown', handle_pointerdown);
+      node.removeEventListener("pointerdown", handle_pointerdown);
     },
   };
 };

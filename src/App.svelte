@@ -1,8 +1,12 @@
 <script lang="ts">
   import { pannable } from "@/lib/pannable";
-  import { createThreeApi } from "@/lib/three-api";
+  import { createThreeApi, type Api } from "@/lib/three-api";
   import { onMount } from "svelte";
   import { spring } from "svelte/motion";
+
+  const CAMERA_INITIAL_POSITION = { x: 0, y: 0, z: 8 };
+
+  type EventWithTarget<Event, Target> = Event & { currentTarget: Target };
 
   let canvasProxyEl: HTMLDivElement;
   let canvasEl: HTMLCanvasElement;
@@ -10,7 +14,7 @@
 
   onMount(() => {
     //canvas observables
-    api.init(canvasProxyEl, canvasEl);
+    api.init(canvasProxyEl, canvasEl, CAMERA_INITIAL_POSITION);
 
     //animation loop
     const loop = () => {
@@ -25,13 +29,10 @@
     };
   });
 
-  let coords = spring(
-    { x: 50, y: 50 },
-    {
-      stiffness: 0.1,
-      damping: 0.25,
-    }
-  );
+  let cameraPosition = spring(CAMERA_INITIAL_POSITION, {
+    stiffness: 0.1,
+    damping: 0.99,
+  });
   let trajectory = spring(
     { x: 0, y: 0 },
     {
@@ -41,42 +42,72 @@
   );
 
   function handlePanStart(event: CustomEvent<{ x: number; y: number }>) {
-    // coords.stiffness = coords.damping = 1;
+    // event.preventDefault();
+    // cameraPosition.stiffness = cameraPosition.damping = 1;
   }
 
   function handlePanMove(
     event: CustomEvent<{ x: number; y: number; dx: number; dy: number }>
   ) {
-    coords.update(($coords) => ({
-      x: $coords.x + event.detail.dx,
-      y: $coords.y + event.detail.dy,
+    cameraPosition.update(($cameraPosition) => ({
+      x: $cameraPosition.x + event.detail.dx,
+      y: $cameraPosition.y + event.detail.dy,
+      z: $cameraPosition.z,
     }));
   }
 
   function handlePanEnd(event: CustomEvent<{ x: number; y: number }>) {
-    coords.set({ x: 0, y: 0 });
+    // event.preventDefault();
+  }
+
+  const handleMouseWheel = (
+    event: EventWithTarget<WheelEvent, HTMLCanvasElement>
+  ) => {
+    // event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    const dy = event.deltaY / rect.height;
+
+    cameraPosition.update(({ x, y, z }) => ({
+      x,
+      y: -y,
+      z: z + dy,
+    }));
+
+    console.log("wheel");
+  };
+
+  const isInit = (api: Api | undefined | null): api is Api => {
+    return (api as Api)?.state()?.initialised === true;
+  };
+
+  $: if (isInit(api)) {
+    api.moveCamera(api.state(), $cameraPosition);
+    console.log($cameraPosition);
   }
 </script>
 
-<!-- <div bind:this={canvasProxyEl} class:canvas-proxy={true}> -->
-<canvas
-  class:webgl-canvas={false}
-  class:box={true}
-  bind:this={canvasEl}
-  use:pannable
-  on:panstart={handlePanStart}
-  on:panmove={handlePanMove}
-  on:panend={handlePanEnd}
-  on:multipointerpanmove={(x) => console.log(x)}
-  style="transform:translate({$coords.x}px,{$coords.y}px)"
-/>
-<!-- </div> -->
+<div bind:this={canvasProxyEl} class:canvas-proxy={true}>
+  <canvas
+    class:webgl-canvas={true}
+    bind:this={canvasEl}
+    use:pannable={{
+      xi: CAMERA_INITIAL_POSITION.x,
+      yi: CAMERA_INITIAL_POSITION.y,
+      zi: CAMERA_INITIAL_POSITION.z,
+    }}
+    on:wheel={handleMouseWheel}
+    on:panstart={handlePanStart}
+    on:panmove={handlePanMove}
+    on:panend={handlePanEnd}
+    on:multipointerpanmove={(x) => console.log(x)}
+  />
+</div>
 
 <div class:controls={true}>
   <label>
-    <h3>stiffness ({coords.stiffness})</h3>
+    <h3>stiffness ({cameraPosition.stiffness})</h3>
     <input
-      bind:value={coords.stiffness}
+      bind:value={cameraPosition.stiffness}
       type="range"
       min="0"
       max="1"
@@ -85,9 +116,9 @@
   </label>
 
   <label>
-    <h3>damping ({coords.damping})</h3>
+    <h3>damping ({cameraPosition.damping})</h3>
     <input
-      bind:value={coords.damping}
+      bind:value={cameraPosition.damping}
       type="range"
       min="0"
       max="1"
@@ -101,10 +132,23 @@
     position: absolute;
     right: 1em;
     z-index: 4;
+    background-color: red;
+    width: 100px;
+    height: 100px;
   }
   .canvas-proxy {
+    touch-action: none;
+
     z-index: 0;
     position: relative;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    min-width: 100vw;
+    min-height: 100vh;
+    max-height: 100vh;
+    max-width: 100vw;
     height: 100%;
     width: 100%;
     box-sizing: border-box;
@@ -115,31 +159,17 @@
     background-color: red;
   }
 
-  .box {
-    z-index: 2;
-    background-color: green;
-    --width: 400px;
-    --height: 400px;
-    position: absolute;
-    width: var(--width);
-    height: var(--height);
-    left: calc(50% - var(--width) / 2);
-    top: calc(50% - var(--height) / 2);
-    border-radius: 4px;
-    background-color: #ff3e00;
-    cursor: move;
-  }
-
   .webgl-canvas {
+    touch-action: none;
     z-index: 2;
-    background-color: red;
     position: absolute;
+    background-color: red;
     height: 100%;
     width: 100%;
     top: 0;
-    // left: 0;
-    // right: 0;
-    // bottom: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     box-sizing: border-box;
     touch-action: none;
 

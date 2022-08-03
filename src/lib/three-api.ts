@@ -1,23 +1,17 @@
 import {
   AmbientLight,
-  Color,
-  Fog,
-  Group,
-  LoadingManager,
-  PerspectiveCamera,
-  Scene,
-  Texture,
-  TextureLoader,
-  Vector2,
-  Vector3,
-  WebGLRenderer,
   BoxGeometry,
-  MeshStandardMaterial,
-  Mesh,
+  Color,
   DirectionalLight,
-  PointLight,
+  Fog,
+  Mesh,
   MeshNormalMaterial,
-} from 'three';
+  PerspectiveCamera,
+  PointLight,
+  Scene,
+  Vector2,
+  WebGLRenderer,
+} from "three";
 
 type Object3dHandles = {
   ambientLight: AmbientLight;
@@ -39,24 +33,16 @@ export type ThreeState = {
   canvasProxyEl: HTMLDivElement;
 };
 
-const SOLID_COLOR_TEXTURE = (color) => {
-  const canvas = document.createElement('canvas');
-  const context = canvas.getContext('2d');
-  canvas.width = 16;
-  canvas.height = 16;
-  context.fillStyle = color;
-  context.fillRect(0, 0, 16, 16);
-  const texture = new Texture(canvas);
-  texture.needsUpdate = true;
-  return texture;
-};
-
 export const createThreeApi = () => {
   let state: ThreeState;
 
   return {
     state: () => state,
-    init: (canvasProxyEl: HTMLDivElement, canvasEl: HTMLCanvasElement) => {
+    init: (
+      canvasProxyEl: HTMLDivElement,
+      canvasEl: HTMLCanvasElement,
+      cameraInitialPosition: { x: number; y: number; z: number }
+    ) => {
       // scenes :
       const scene = new Scene();
       scene.fog = new Fog(0x000000, 1, 1000);
@@ -70,7 +56,7 @@ export const createThreeApi = () => {
 
       const fov = 50;
       const near = 0.1;
-      const far = 50;
+      const far = 1000;
       const camera = new PerspectiveCamera(fov, aspect, near, far);
 
       const renderer = new WebGLRenderer({
@@ -81,19 +67,19 @@ export const createThreeApi = () => {
       const dpr = window?.devicePixelRatio || 1;
       renderer.setPixelRatio(dpr);
 
-      const ambientLight = new AmbientLight(new Color('white'), 1);
-      const directionalLight = new DirectionalLight(new Color('red'), 0.2);
-      const pointLight = new PointLight(new Color('orange'));
-
-      const defaultTexture = SOLID_COLOR_TEXTURE('#00446b');
+      const ambientLight = new AmbientLight(new Color("white"), 1);
+      const directionalLight = new DirectionalLight(new Color("red"), 0.2);
+      const pointLight = new PointLight(new Color("orange"));
 
       const geometry = new BoxGeometry(1, 1, 1);
       const material = new MeshNormalMaterial();
       const cube = new Mesh(geometry, material);
 
-      camera.position.z = 4;
-      camera.position.y = 2;
-      camera.position.x = 2;
+      camera.position.set(
+        cameraInitialPosition.x,
+        cameraInitialPosition.y,
+        cameraInitialPosition.z
+      );
       camera.lookAt(cube.position);
 
       scene.add(ambientLight, directionalLight, cube);
@@ -130,6 +116,13 @@ export const createThreeApi = () => {
       }
 
       renderer.render(scene, camera);
+    },
+    moveCamera: (
+      state: ThreeState,
+      { x, y, z }: { x: number; y: number; z: number }
+    ) => {
+      const { camera } = state;
+      camera.position.set(x, y, z);
     },
   };
 };
