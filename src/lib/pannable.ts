@@ -1,33 +1,10 @@
+import type {
+  EventFromEventTag,
+  PointerEventTag,
+  TaggedEvent,
+} from "./pannable.types";
 import type { Action } from "./types";
-/**
- * Creates panStart, panMove, panEnd events so you can drag elements.
- *
- * Demo: https://svelte.dev/tutorial/actions
- *
- * @example
- * ```svelte
- * <div use:pannable={true} on:panstart on:panmove on:panend>
- * ```
- */
 
-type PointerEventTag =
-  | "pointercancel"
-  | "pointerdown"
-  | "pointerenter"
-  | "pointerleave"
-  | "pointermove"
-  | "pointerout"
-  | "pointerover"
-  | "pointerup";
-
-type EventTag = keyof HTMLElementEventMap;
-type EventFromEventTag<K extends EventTag> = HTMLElementEventMap[K];
-
-interface TaggedEvent<K extends EventTag, El extends HTMLElement> {
-  tag: K;
-  element: El;
-  event: HTMLElementEventMap[K];
-}
 const coordinates = <El extends HTMLElement>({
   element,
   event,
@@ -49,21 +26,6 @@ const coordinates = <El extends HTMLElement>({
   };
 };
 
-const pinchOffset = <El extends HTMLElement>([point1, point2]: [
-  CacheEntry<El>,
-  CacheEntry<El>
-]) => {
-  const { x: x1_i, y: y1_i } = coordinates(point1[point1.length - 2]).ndc;
-  const { x: x2_i, y: y2_i } = coordinates(point1[point2.length - 2]).ndc;
-  const { x: x1_f, y: y1_f } = coordinates(point1[point1.length - 1]).ndc;
-  const { x: x2_f, y: y2_f } = coordinates(point2[point2.length - 1]).ndc;
-
-  return (
-    Math.sqrt((x2_f - x1_f) * (x2_f - x1_f) + (y2_f - y1_f) * (y2_f - y1_f)) -
-    Math.sqrt((x2_i - x1_i) * (x2_i - x1_i) + (y2_i - y1_i) * (y2_i - y1_i))
-  );
-};
-
 const pointerDifference = <El extends HTMLElement>(
   pointer1: TaggedEvent<PointerEventTag, El>,
   pointer2: TaggedEvent<PointerEventTag, El>
@@ -72,43 +34,35 @@ const pointerDifference = <El extends HTMLElement>(
   const pointer2Coords = coordinates(pointer2);
 
   return {
-    dt: pointer2.event.timeStamp - pointer1.event.timeStamp,
-    dP_Normal: pointer2.event.pressure - pointer1.event.pressure,
+    dt: pointer1.event.timeStamp - pointer2.event.timeStamp,
+    dP_Normal: pointer1.event.pressure - pointer2.event.pressure,
     dP_Tangential:
-      pointer2.event.tangentialPressure - pointer1.event.tangentialPressure,
+      pointer1.event.tangentialPressure - pointer2.event.tangentialPressure,
     dA:
-      pointer2.event.width * pointer2.event.height -
-      pointer1.event.width * pointer1.event.height,
-    dTiltX: pointer2.event.tiltX - pointer1.event.tiltX,
-    dTiltY: pointer2.event.tiltY - pointer1.event.tiltY,
-    dTwist: pointer2.event.twist - pointer1.event.twist,
-    dNormalisedDeviceCoords: {
-      dx: pointer2Coords.ndc.x - pointer1Coords.ndc.x,
-      dy: pointer2Coords.ndc.y - pointer1Coords.ndc.y,
-    },
-    dPixelCoords: {
-      dx: pointer2Coords.pixel.x - pointer1Coords.pixel.x,
-      dy: pointer2Coords.pixel.y - pointer1Coords.pixel.y,
-    },
+      pointer1.event.width * pointer1.event.height -
+      pointer2.event.width * pointer2.event.height,
+    dTiltX: pointer1.event.tiltX - pointer2.event.tiltX,
+    dTiltY: pointer1.event.tiltY - pointer2.event.tiltY,
+    dTwist: pointer1.event.twist - pointer2.event.twist,
+    dx: pointer1Coords.ndc.x - pointer2Coords.ndc.x,
+    dy: pointer1Coords.ndc.y - pointer2Coords.ndc.y,
   };
 };
 export type PointerDifference = ReturnType<typeof pointerDifference>;
 
-const handleMultipointerpanmove = <El extends HTMLElement>(
+const handlepanmoves = <El extends HTMLElement>(
   cache: Map<string, CacheEntry<El>>
 ) => {
   return Array.from(cache)
     .map(([key, value]) => value)
-    .filter((arr) => arr.length === 1)
+    .filter((arr) => arr.length >= 2)
     .map(
       (cacheEntry) =>
-        new CustomEvent("multipointerpanmove", {
-          detail: {
-            delta: pointerDifference(
-              cacheEntry[cacheEntry.length - 2],
-              cacheEntry[cacheEntry.length - 1]
-            ),
-          },
+        new CustomEvent("panmove", {
+          detail: pointerDifference(
+            cacheEntry[cacheEntry.length - 2],
+            cacheEntry[cacheEntry.length - 1]
+          ),
         })
     );
 };
@@ -156,7 +110,7 @@ export const pannable: Action<{ xi: number; yi: number; zi: number }, void> = (
       element: node,
       event: event,
     };
-    const { ndc, pixel } = coordinates(pointerdownEv);
+    const { ndc } = coordinates(pointerdownEv);
 
     handleIncomingPointerEventsStream(cache, pointerdownEv);
 
@@ -176,23 +130,15 @@ export const pannable: Action<{ xi: number; yi: number; zi: number }, void> = (
       element: node,
       event: event,
     };
-    const { ndc, pixel } = coordinates(pointerMoveEv);
-
-    const dx = x - ndc.x;
-    const dy = y - ndc.y;
+    const { ndc } = coordinates(pointerMoveEv);
     x = ndc.x;
     y = ndc.y;
 
     handleIncomingPointerEventsStream(cache, pointerMoveEv);
 
-    node.dispatchEvent(
-      new CustomEvent("panmove", {
-        detail: { x, y, dx, dy },
-      })
-    );
+    const panmoves = handlepanmoves(cache);
 
-    const multipointerpanmoves = handleMultipointerpanmove(cache);
-    multipointerpanmoves.forEach((multipointerpanmove) =>
+    panmoves.forEach((multipointerpanmove) =>
       node.dispatchEvent(multipointerpanmove)
     );
   }
@@ -203,7 +149,7 @@ export const pannable: Action<{ xi: number; yi: number; zi: number }, void> = (
       element: node,
       event: event,
     };
-    const { ndc, pixel } = coordinates(pointerupEv);
+    const { ndc } = coordinates(pointerupEv);
 
     handleIncomingPointerEventsStream(cache, pointerupEv);
 

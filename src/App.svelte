@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { pannable } from "@/lib/pannable";
+  import { pannable, type PointerDifference } from "@/lib/pannable";
   import { createThreeApi, type Api } from "@/lib/three-api";
   import { onMount } from "svelte";
   import { spring } from "svelte/motion";
@@ -29,10 +29,19 @@
     };
   });
 
-  let cameraPosition = spring(CAMERA_INITIAL_POSITION, {
-    stiffness: 0.1,
-    damping: 0.99,
-  });
+  let camera2DPosition = spring(
+    { x: CAMERA_INITIAL_POSITION.x, y: CAMERA_INITIAL_POSITION.y },
+    {
+      stiffness: 0.1,
+      damping: 0.99,
+    }
+  );
+
+  let cameraZoom = spring(
+    { z: CAMERA_INITIAL_POSITION.z },
+    { stiffness: 0.1, damping: 0.99 }
+  );
+
   let trajectory = spring(
     { x: 0, y: 0 },
     {
@@ -46,13 +55,10 @@
     // cameraPosition.stiffness = cameraPosition.damping = 1;
   }
 
-  function handlePanMove(
-    event: CustomEvent<{ x: number; y: number; dx: number; dy: number }>
-  ) {
-    cameraPosition.update(($cameraPosition) => ({
+  function handlePanMove(event: CustomEvent<PointerDifference>) {
+    camera2DPosition.update(($cameraPosition) => ({
       x: $cameraPosition.x + event.detail.dx,
       y: $cameraPosition.y + event.detail.dy,
-      z: $cameraPosition.z,
     }));
   }
 
@@ -67,13 +73,9 @@
     const rect = event.currentTarget.getBoundingClientRect();
     const dy = event.deltaY / rect.height;
 
-    cameraPosition.update(({ x, y, z }) => ({
-      x,
-      y: -y,
-      z: z + dy,
+    cameraZoom.update(({ z }) => ({
+      z: z - dy,
     }));
-
-    console.log("wheel");
   };
 
   const isInit = (api: Api | undefined | null): api is Api => {
@@ -81,8 +83,11 @@
   };
 
   $: if (isInit(api)) {
-    api.moveCamera(api.state(), $cameraPosition);
-    console.log($cameraPosition);
+    api.pan(api.state(), $camera2DPosition);
+  }
+  $: if (isInit(api)) {
+    api.zoom(api.state(), $cameraZoom.z);
+    console.log($cameraZoom);
   }
 </script>
 
@@ -99,11 +104,10 @@
     on:panstart={handlePanStart}
     on:panmove={handlePanMove}
     on:panend={handlePanEnd}
-    on:multipointerpanmove={(x) => console.log(x)}
   />
 </div>
 
-<div class:controls={true}>
+<!-- <div class:controls={true}>
   <label>
     <h3>stiffness ({cameraPosition.stiffness})</h3>
     <input
@@ -125,8 +129,7 @@
       step="0.01"
     />
   </label>
-</div>
-
+</div> -->
 <style lang="scss">
   .controls {
     position: absolute;
@@ -137,18 +140,15 @@
     height: 100px;
   }
   .canvas-proxy {
+    overscroll-behavior-y: none;
+    overscroll-behavior-x: none;
     touch-action: none;
-
     z-index: 0;
     position: relative;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    min-width: 100vw;
-    min-height: 100vh;
-    max-height: 100vh;
-    max-width: 100vw;
     height: 100%;
     width: 100%;
     box-sizing: border-box;

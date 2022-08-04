@@ -3,10 +3,10 @@ declare namespace svelte.JSX {
 
   interface HTMLAttributes<T> {
     onpanstart?: (e: CustomEvent<{ x: number; y: number }>) => void;
-    onpanmove?: (
-      e: CustomEvent<{ x: number; y: number; dx: number; dy: number }>
-    ) => void;
+    // onpanmove?: (
+    //   e: CustomEvent<{ x: number; y: number; dx: number; dy: number }>
+    // ) => void;
     onpanend?: (e: CustomEvent<{ x: number; y: number }>) => void;
-    onmultipointerpanmove?: (e: CustomEvent<PointerDifference>) => void;
+    onpanmove?: (e: CustomEvent<PointerDifference>) => void;
   }
 }

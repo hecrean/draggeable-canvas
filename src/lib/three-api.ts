@@ -117,12 +117,13 @@ export const createThreeApi = () => {
 
       renderer.render(scene, camera);
     },
-    moveCamera: (
-      state: ThreeState,
-      { x, y, z }: { x: number; y: number; z: number }
-    ) => {
+    pan: (state: ThreeState, { x, y }: { x: number; y: number }) => {
       const { camera } = state;
-      camera.position.set(x, y, z);
+      camera.position.set(x, y, camera.position.z);
+    },
+    zoom: (state: ThreeState, z: number) => {
+      const { camera } = state;
+      camera.position.setZ(z);
     },
   };
 };
