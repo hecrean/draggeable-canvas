@@ -4,13 +4,17 @@
   import { onMount } from "svelte";
   import { spring } from "svelte/motion";
 
-  const CAMERA_INITIAL_POSITION = { x: 0, y: 0, z: 8 };
+  const CAMERA_INITIAL_POSITION = { x: 0, y: 0, z: 3 };
 
   type EventWithTarget<Event, Target> = Event & { currentTarget: Target };
 
   let canvasProxyEl: HTMLDivElement;
   let canvasEl: HTMLCanvasElement;
+
   const api = createThreeApi();
+  const isInit = (api: Api | undefined | null): api is Api => {
+    return (api as Api)?.state()?.initialised === true;
+  };
 
   onMount(() => {
     //canvas observables
@@ -32,35 +36,28 @@
   let camera2DPosition = spring(
     { x: CAMERA_INITIAL_POSITION.x, y: CAMERA_INITIAL_POSITION.y },
     {
-      stiffness: 0.1,
-      damping: 0.99,
+      stiffness: 0.2,
+      damping: 0.5,
     }
   );
 
   let cameraZoom = spring(
     { z: CAMERA_INITIAL_POSITION.z },
-    { stiffness: 0.1, damping: 0.99 }
-  );
-
-  let trajectory = spring(
-    { x: 0, y: 0 },
-    {
-      stiffness: 0.1,
-      damping: 0.25,
-    }
+    { stiffness: 0.04, damping: 0.1 }
   );
 
   function handlePanStart(event: CustomEvent<{ x: number; y: number }>) {
+    event.stopPropagation();
     // event.preventDefault();
     // cameraPosition.stiffness = cameraPosition.damping = 1;
   }
 
-  function handlePanMove(event: CustomEvent<PointerDifference>) {
+  const handlePanMove = (event: CustomEvent<PointerDifference>) => {
     camera2DPosition.update(($cameraPosition) => ({
       x: $cameraPosition.x + event.detail.dx,
       y: $cameraPosition.y + event.detail.dy,
     }));
-  }
+  };
 
   function handlePanEnd(event: CustomEvent<{ x: number; y: number }>) {
     // event.preventDefault();
@@ -78,15 +75,14 @@
     }));
   };
 
-  const isInit = (api: Api | undefined | null): api is Api => {
-    return (api as Api)?.state()?.initialised === true;
-  };
-
   $: if (isInit(api)) {
-    api.pan(api.state(), $camera2DPosition);
+    api.pan(api.state(), $camera2DPosition, camera2DPosition.set);
   }
   $: if (isInit(api)) {
-    api.zoom(api.state(), $cameraZoom.z);
+    api.zoom(api.state(), $cameraZoom.z, camera2DPosition.set, cameraZoom.set);
+  }
+  $: if (isInit(api)) {
+    console.log($camera2DPosition);
     console.log($cameraZoom);
   }
 </script>
